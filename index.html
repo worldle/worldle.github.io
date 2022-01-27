@@ -215,7 +215,7 @@ const setUpGamePlayController = (wordsAlphaSet) => {
 
 window.onload = async (event) => {
   let wordsAlpha = await wordsAlphaPromise;
-  let wordsAlphaSet = new Set(wordsAlpha.split("\r\n"));
+  let wordsAlphaSet = new Set(wordsAlpha.split("\n"));
 
   handleViewSelection();
   setUpGameGenerationController(wordsAlphaSet);
