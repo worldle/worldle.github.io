@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Worldle - A shareable Wordle!</title>
+  <style type="text/css">
+    .row {
+      display: block;
+      padding: 0;
+    }
+
+    .char-box {
+      background-color: lightgrey;
+      display: inline-block;
+      height: 2em;
+      margin-top: 0.2em;
+      margin-right: 0.2em;
+      text-align: center;
+      width: 2em;
+    }
+
+    .correct-guess-char-box {
+      background-color: green;
+    }
+
+    .correct-guess-incorrect-placement-char-box {
+      background-color: yellow;
+    }
+
+    .incorrect-guess-char-box {
+      background-color: darkgrey;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Worldle</h1>
+
+<h2>A shareable Wordle!</h2>
+
+<!-- The view for generating a new game -->
+<div id="generate_game_view" style="display: none;">
+  Input a word to generate a game from:
+  <input id="generate_word_input" type="text"/>
+  <p>
+  <button id="generate_btn">Generate game</button>
+  <p>  
+  <div id="generated_game_div"></div>
+</div>
+
+<!-- The view for playing a game -->
+<div id="play_game_view" style="display: none;">
+  Play the game
+  <input id="play_word_input" type="text">
+  <button id="guess_btn">Guess</button>
+  <div id="playing_field_view" style="margin-top: 0.2em;"></div>
+</div>
+
+<!-- Various templates defined here. -->
+<div style ="display: none;">
+  <span id="" style="color:green"></span>
+</div>
+
+<script type="text/javascript">
+const WORD_ID_URL_PARAM = "game_id";
+
+// Load all of the words from the text file.
+const wordsAlphaPromise = fetch("words_alpha.txt")
+  .then(response => response.text())
+  .catch(error => console.log(error));
+
+class PlayingField {
+  constructor(gameWidth, gameHeight) {
+    this.playingFieldList = [];
+    this.playingFieldContainer = document.createElement("div");
+    // Generate the list and container.
+    for(let row = 0; row < gameHeight; row++) {
+      let rowElem = document.createElement("div");
+      let rowList = [];
+      rowElem.classList.add("row");
+
+      for(let col = 0; col < gameWidth; col++) {
+        let colElem = document.createElement("div");
+        colElem.classList.add("char-box");
+        rowElem.appendChild(colElem);
+        rowList.push(colElem);
+      }
+
+      this.playingFieldList.push(rowList);
+      this.playingFieldContainer.appendChild(rowElem);
+    }
+
+    // Game tracking values.
+    this.gameWidth = gameWidth;
+    this.gameHeight = gameHeight;
+    this.rowIndex = 0;
+  }
+
+  get isGameOver() {
+    return this.calcGameOver();
+  }
+
+  calcGameOver() {
+    return this.rowIndex >= this.gameHeight;
+  }
+
+  isValidWord(wordToVerifyText) {
+    return wordToVerifyText.length === this.gameWidth;
+  }
+
+  getCharElem(colIndex) {
+    return this.playingFieldList[this.rowIndex][colIndex];
+  }
+}
+
+// Set-up and generate the game if needed.
+const urlParams = new URLSearchParams(window.location.search);
+let wordText = null;
+let playingField = null;
+if(urlParams.has(WORD_ID_URL_PARAM)) {
+  wordText = atob(decodeURIComponent(urlParams.get(WORD_ID_URL_PARAM)));
+  const gameWidth = wordText.length;
+  const gameHeight = gameWidth + 1;
+  playingField = new PlayingField(gameWidth, gameHeight);
+}
+
+const handleGameGenerationBtn = (wordsAlphaSet) => {
+  const inputString = document.getElementById("generate_word_input").value;
+  const outputGameDivDomObj = document.getElementById("generated_game_div");
+
+  if(!wordsAlphaSet.has(inputString)) {
+    // Invalid word. Tell the user about this.
+    outputGameDivDomObj.innerText = "Invalid word!";
+    return;
+  }
+
+  // Generate the game URL.
+  const newGameUrl = new URL(window.location.href);
+  newGameUrl.searchParams
+    .delete(WORD_ID_URL_PARAM);
+  newGameUrl.searchParams
+    .append(WORD_ID_URL_PARAM, encodeURIComponent(btoa(inputString)));
+  outputGameDivDomObj.textContent = newGameUrl.href;
+}
+
+const handleWordGuessBtn = (wordsAlphaSet) => {
+  if(playingField.isGameOver) {
+    alert("Game over!");
+    return;
+  }
+  let guessedWordText = document.getElementById("play_word_input").value;
+  if(!playingField.isValidWord(guessedWordText)) {
+    alert("Invalid word!");
+    return;
+  }
+  if(!wordsAlphaSet.has(guessedWordText)) {
+    alert("Word not in word bank!");
+    return;
+  }
+
+  // Check the guess.
+  for(let i = 0; i < wordText.length; i++) {
+    let guessedChar = guessedWordText.charAt(i);
+    let charBoxElem = playingField.getCharElem(i);
+
+    charBoxElem.textContent = guessedChar;
+
+    if(wordText.charAt(i) == guessedChar) {
+      charBoxElem.classList.add("correct-guess-char-box");
+    } else if(wordText.includes(guessedChar)) {
+      charBoxElem.classList.add("correct-guess-incorrect-placement-char-box");
+    } else {
+      charBoxElem.classList.add("incorrect-guess-char-box");
+    }
+  }
+
+  // Handle the game state.
+  if(wordText === guessedWordText) {
+    playingField.rowIndex = playingField.gameHeight;
+  } else {
+    playingField.rowIndex++;
+  }
+}
+
+const handleViewSelection = () => {
+  const showElem = (elem) => {
+    elem.style.removeProperty("display");
+  }
+
+  if(urlParams.has(WORD_ID_URL_PARAM)) {
+    // Show the play game view.
+    showElem(document.getElementById("play_game_view"));
+  } else {
+    // Show the game generation view.
+    showElem(document.getElementById("generate_game_view"));
+  }
+}
+
+const setUpGameGenerationController = (wordsAlphaSet) => {  
+  document.getElementById("generate_btn")
+    .addEventListener(
+      "click",
+      () => handleGameGenerationBtn(wordsAlphaSet));
+}
+
+const setUpGamePlayController = (wordsAlphaSet) => {
+  document.getElementById("playing_field_view")
+    .appendChild(playingField.playingFieldContainer);
+  document.getElementById("guess_btn")
+    .addEventListener(
+      "click",
+      () => handleWordGuessBtn(wordsAlphaSet));
+}
+
+window.onload = async (event) => {
+  let wordsAlpha = await wordsAlphaPromise;
+  let wordsAlphaSet = new Set(wordsAlpha.split("\r\n"));
+
+  handleViewSelection();
+  setUpGameGenerationController(wordsAlphaSet);
+  if(urlParams.has(WORD_ID_URL_PARAM)) {
+    setUpGamePlayController(wordsAlphaSet);
+  }
+}
+</script>
+</body>
+</html>
